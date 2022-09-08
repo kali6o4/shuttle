@@ -371,7 +371,7 @@ impl ShuttleInit for ShuttleInitTower {
         #[derive(Clone)]
         struct HelloWorld;
 
-        impl tower::Service<hyper::Request<hyper::Body>> for HelloWorld {
+        impl toweer::Service<hypr::Request<hyper::Body>> for HelloWorld {
             type Response = hyper::Response<hyper::Body>;
             type Error = Infallible;
             type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + Sync>>;
@@ -395,6 +395,50 @@ impl ShuttleInit for ShuttleInitTower {
 
         #[shuttle_service::main]
         async fn tower() -> Result<HelloWorld, shuttle_service::Error> {
+            Ok(HelloWorld)
+        }"#}
+    }
+}
+
+impl ShuttleInit for ShuttleInitFrenezulo {
+    fn set_cargo_dependencies(
+        &self,
+        dependencies: &mut Table,
+        manifest_path: &Path,
+        url: &Url,
+        get_dependency_version_fn: GetDependencyVersionFn,
+    ) {
+        set_key_value_dependency_version(
+            "frenezulo_beta",
+            dependencies,
+            manifest_path,
+            url,
+            false,
+            get_dependency_version_fn,
+        );
+
+        set_inline_table_dependency_features(
+            "shuttle-service",
+            dependencies,
+            vec!["frenezulo_beta".to_string()],
+        );
+    }
+
+    fn get_boilerplate_code_for_framework(&self) -> &'static str {
+        indoc! {r#"
+        use frenezulo_beta::{Response, ResponseMetadata, Request};
+
+        struct HelloWorld;
+
+        #[frenezulo_beta::handler]
+        fn handle(request: Request) -> Response {
+            Response { metadata: ResponseMetadata { status: 200, version: request.metadata.version, headers: Default::default() },
+                body: b"Hello World!".to_vec()
+            }
+        }
+
+        #[shuttle_service::main]
+        async fn frenezulo_beta() -> Result<HelloWorld, shuttle_service::Error> {
             Ok(HelloWorld)
         }"#}
     }
@@ -442,6 +486,10 @@ pub fn get_framework(init_args: &InitArgs) -> Box<dyn ShuttleInit> {
 
     if init_args.serenity {
         return Box::new(ShuttleInitSerenity);
+    }
+
+    if init_args.frenezulo_beta {
+        return Box::new(ShuttleInitFrenezulo);
     }
 
     Box::new(ShuttleInitNoOp)
@@ -595,6 +643,7 @@ mod shuttle_init_tests {
             tower: false,
             poem: false,
             serenity: false,
+            frenezulo_beta: false,
             path: PathBuf::new(),
         };
 
@@ -605,6 +654,7 @@ mod shuttle_init_tests {
             "tower" => init_args.tower = true,
             "poem" => init_args.poem = true,
             "serenity" => init_args.serenity = true,
+            "frenezulo_beta" => init_args.frenezulo_beta = true,
             _ => unreachable!(),
         }
 
@@ -638,6 +688,8 @@ mod shuttle_init_tests {
             Box::new(ShuttleInitTower),
             Box::new(ShuttleInitPoem),
             Box::new(ShuttleInitSerenity),
+            Box::new(ShuttleInitFrenezulo),
+
         ];
 
         for (framework, expected_framework_init) in frameworks.into_iter().zip(framework_inits) {
@@ -907,6 +959,40 @@ mod shuttle_init_tests {
             log = "1.0"
             serenity = { version = "1.0", default-features = false, features = ["client", "gateway", "rustls_backend", "model"] }
             sqlx = { version = "1.0", features = ["runtime-tokio-native-tls", "postgres"] }
+        "#};
+
+        assert_eq!(cargo_toml.to_string(), expected);
+    }
+
+    #[test]
+    fn test_set_cargo_dependencies_frenezulo_beta() {
+        let mut cargo_toml = cargo_toml_factory();
+        let dependencies = cargo_toml["dependencies"].as_table_mut().unwrap();
+        let manifest_path = PathBuf::new();
+        let url = Url::parse("https://shuttle.rs").unwrap();
+
+        set_inline_table_dependency_version(
+            "shuttle-service",
+            dependencies,
+            &manifest_path,
+            &url,
+            false,
+            mock_get_latest_dependency_version,
+        );
+
+        ShuttleInitFrenezulo.set_cargo_dependencies(
+            dependencies,
+            &manifest_path,
+            &url,
+            mock_get_latest_dependency_version,
+        );
+
+        let expected = indoc! {r#"
+            [dependencies]
+            shuttle-service = { version = "1.0", features = ["bot-serenity", "sqlx-postgres", "secrets"] }
+            frenezulo-beta = "0.1.0"
+            lunatic = "0.11.1"
+            serde_bytes = "0.11.7"
         "#};
 
         assert_eq!(cargo_toml.to_string(), expected);

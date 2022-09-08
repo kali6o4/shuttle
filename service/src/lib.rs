@@ -529,4 +529,17 @@ impl Service for serenity::Client {
 #[cfg(feature = "bot-serenity")]
 pub type ShuttleSerenity = Result<serenity::Client, Error>;
 
+#[cfg(feature = "web-frenezulo_beta")]
+#[async_trait]
+impl Service for frenezulo_beta::handler {
+    async fn bind(mut self: Box<Self>, _addr: SocketAddr) -> Result<(), error::Error> {
+        self.start().await.map_err(error::CustomError::new)?;
+
+        Ok(())
+    }
+}
+
+#[cfg(feature = "web-frenezulo_beta")]
+pub type ShuttleFrenezulo = Result<frenezulo_beta::handler, Error>;
+
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
